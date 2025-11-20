@@ -188,7 +188,7 @@
         // Append Images
         nodes.filter(d => d.type === "image")
             .append("image")
-            .attr("xlink:href", d => d.src)
+            .attr("href", d => d.src)
             .attr("x", -30)
             .attr("y", -30)
             .attr("width", 60)
