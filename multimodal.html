@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Embeddings: Image & Text</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        #controls {
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #ff4b4b;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #ff3333;
+        }
+
+        #canvas {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .node text {
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+            text-anchor: middle;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            max-width: 300px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .vector-preview {
+            color: #4b8bff;
+            word-break: break-all;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Multimodal Embedding Space</h1>
+    <p>See how images and text concepts map to the same vector space. Hover to see the vector.</p>
+
+    <div id="controls">
+        <button onclick="toggleLayout()">Align to Semantic Space</button>
+    </div>
+
+    <div id="vis"></div>
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        const width = 800;
+        const height = 600;
+        const svg = d3.select("#vis").append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .attr("id", "canvas");
+
+        // Helper to generate a mock vector string
+        function getVectorString(v) {
+            return "[" + v.map(n => n.toFixed(2)).join(", ") + ", ...]";
+        }
+
+        function generateRandomVector() {
+            return Array.from({ length: 5 }, () => Math.random() * 2 - 1);
+        }
+
+        // Data: Nodes with two states (Random vs Semantic)
+        const data = [
+            // Cats: High dim 0, Low dim 1
+            {
+                id: "img_cat", type: "image", src: "cat.jpg", label: "Image: Cat",
+                x_rand: 100, y_rand: 100, x_sem: 200, y_sem: 200,
+                vec_trained: [0.88, 0.12, -0.5, 0.3, 0.1]
+            },
+            {
+                id: "txt_cat", type: "text", text: "Cat", label: "Text: 'Cat'",
+                x_rand: 700, y_rand: 500, x_sem: 220, y_sem: 230,
+                vec_trained: [0.91, 0.15, -0.48, 0.28, 0.12]
+            },
+            {
+                id: "txt_fel", type: "text", text: "Feline", label: "Text: 'Feline'",
+                x_rand: 50, y_rand: 500, x_sem: 180, y_sem: 180,
+                vec_trained: [0.85, 0.10, -0.52, 0.32, 0.08]
+            },
+
+            // Dogs: Low dim 0, High dim 1
+            {
+                id: "img_dog", type: "image", src: "dog.jpg", label: "Image: Dog",
+                x_rand: 700, y_rand: 100, x_sem: 600, y_sem: 200,
+                vec_trained: [0.12, 0.89, 0.4, -0.2, 0.7]
+            },
+            {
+                id: "txt_dog", type: "text", text: "Dog", label: "Text: 'Dog'",
+                x_rand: 300, y_rand: 50, x_sem: 580, y_sem: 230,
+                vec_trained: [0.15, 0.92, 0.38, -0.22, 0.68]
+            },
+            {
+                id: "txt_can", type: "text", text: "Canine", label: "Text: 'Canine'",
+                x_rand: 400, y_rand: 550, x_sem: 620, y_sem: 180,
+                vec_trained: [0.10, 0.85, 0.42, -0.18, 0.72]
+            },
+
+            // Random / Other
+            {
+                id: "txt_rnd", type: "text", text: "Apple", label: "Text: 'Apple'",
+                x_rand: 350, y_rand: 300, x_sem: 400, y_sem: 500,
+                vec_trained: [-0.5, -0.5, 0.1, 0.9, -0.2]
+            },
+
+            // No Concept Image
+            {
+                id: "img_car", type: "image", src: "car.jpg", label: "Image: Car (No Concept)",
+                x_rand: 600, y_rand: 400, x_sem: 750, y_sem: 550,
+                vec_trained: [-0.2, 0.3, 0.8, -0.1, -0.8]
+            }
+        ];
+
+        // Assign random vectors for the "untrained" state
+        data.forEach(d => {
+            d.vec_random = generateRandomVector();
+        });
+
+        let isSemantic = false;
+
+        // Initialize positions
+        data.forEach(d => {
+            d.x = d.x_rand;
+            d.y = d.y_rand;
+        });
+
+        const simulation = d3.forceSimulation(data)
+            .force("charge", d3.forceManyBody().strength(-50))
+            .force("collide", d3.forceCollide().radius(40))
+            .on("tick", ticked);
+
+        // Draw Lines (initially hidden, show when close)
+        const links = svg.append("g").selectAll("line");
+
+        // Draw Nodes
+        const nodes = svg.append("g")
+            .selectAll(".node")
+            .data(data)
+            .enter().append("g")
+            .attr("class", "node")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+        // Append Images
+        nodes.filter(d => d.type === "image")
+            .append("image")
+            .attr("xlink:href", d => d.src)
+            .attr("x", -30)
+            .attr("y", -30)
+            .attr("width", 60)
+            .attr("height", 60)
+            .attr("clip-path", "circle(30px at center)");
+
+        // Append Text Circles
+        nodes.filter(d => d.type === "text")
+            .append("circle")
+            .attr("r", 25)
+            .attr("fill", "#4b8bff");
+
+        // Append Text Labels
+        nodes.filter(d => d.type === "text")
+            .append("text")
+            .attr("dy", 5)
+            .attr("fill", "white")
+            .text(d => d.text);
+
+        // Hover Tooltip
+        nodes.on("mouseover", function (event, d) {
+            // Choose vector based on state
+            const vec = isSemantic ? d.vec_trained : d.vec_random;
+            const stateLabel = isSemantic ? "(Trained)" : "(Random Init)";
+            const color = isSemantic ? "#4caf50" : "#ff9800"; // Green for trained, Orange for random
+
+            d3.select("#tooltip")
+                .style("opacity", 1)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 20) + "px")
+                .html(`<strong>${d.label}</strong> <span style="color:${color}; font-size:0.8em">${stateLabel}</span><br><div class="vector-preview">${getVectorString(vec)}</div>`);
+        }).on("mouseout", function () {
+            d3.select("#tooltip").style("opacity", 0);
+        });
+
+        function ticked() {
+            nodes.attr("transform", d => `translate(${d.x},${d.y})`);
+        }
+
+        function toggleLayout() {
+            isSemantic = !isSemantic;
+            const btn = document.querySelector("button");
+            btn.innerText = isSemantic ? "Reset to Random Initialization" : "Train Model (Align Space)";
+
+            if (isSemantic) {
+                // Move to semantic targets
+                simulation.force("x", d3.forceX(d => d.x_sem).strength(0.1));
+                simulation.force("y", d3.forceY(d => d.y_sem).strength(0.1));
+                simulation.alpha(1).restart();
+            } else {
+                // Move to random targets
+                simulation.force("x", d3.forceX(d => d.x_rand).strength(0.1));
+                simulation.force("y", d3.forceY(d => d.y_rand).strength(0.1));
+                simulation.alpha(1).restart();
+            }
+        }
+
+        // Drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Initial Kick
+        toggleLayout(); // Start aligned? No, let's start scrambled.
+        toggleLayout(); // Toggle back to scrambled.
+
+    </script>
+</body>
+
+</html>
