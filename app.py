@@ -66,8 +66,8 @@ def plot_heatmap(df, title):
 # --- Sidebar ---
 st.sidebar.header("Configuration")
 
-default_sentences = """The quick brown fox jumps over the lazy dog.
-A fast brown fox leaps over a sleepy canine.
+default_sentences = """I eat an apple every morning.
+Each breakfast starts with a piece of fruit.
 I love machine learning and natural language processing.
 Artificial intelligence is fascinating.
 The weather is nice today."""
@@ -81,8 +81,8 @@ st.title("NLP Visualization: Term Frequency vs. Modern Embeddings")
 st.markdown('<p class="cda-sub">Cultural Data Analysis &middot; Week 4: Cultural Data Forms: Text</p>', unsafe_allow_html=True)
 st.markdown("""
 This tool visualizes the difference between **Term Frequency (Bag of Words)** representations and **Modern Dense Embeddings**.
-*   **TF (Term Frequency)**: Counts how often words appear. Good for keyword matching, but misses meaning (e.g., "dog" vs "canine").
-*   **Embeddings**: Captures semantic meaning in a vector space. "Dog" and "canine" will be close together.
+*   **TF (Term Frequency)**: Counts how often words appear. Good for keyword matching, but misses meaning (e.g., "apple" vs "fruit").
+*   **Embeddings**: Captures semantic meaning in a vector space. "Apple" and "fruit" will be close together.
 """)
 
 tab1, tab2, tab3, tab4 = st.tabs(["1. Term Frequency (TF)", "2. Modern Embeddings", "3. Visualization (PCA)", "4. Semantic Search Demo"])
@@ -124,7 +124,7 @@ with tab2:
     sim_emb = cosine_similarity(embeddings)
     df_sim_emb = pd.DataFrame(sim_emb, index=[f"S{i+1}" for i in range(len(sentences))], columns=[f"S{i+1}" for i in range(len(sentences))])
     st.plotly_chart(plot_heatmap(df_sim_emb, "Cosine Similarity (Embeddings)"), use_container_width=True)
-    note("Notice: Sentences with similar meanings (e.g., 'dog' and 'canine') have high similarity scores, even without shared words.", blue=True)
+    note("Notice: Sentences with similar meanings (e.g., the apple and the fruit sentences) have high similarity scores, even without shared words.", blue=True)
 
 # --- Tab 3: PCA Visualization ---
 with tab3:
@@ -146,7 +146,7 @@ with tab3:
 # --- Tab 4: Search Demo ---
 with tab4:
     st.header("Semantic Search vs Keyword Search")
-    query = st.text_input("Enter a search query:", "puppy")
+    query = st.text_input("Enter a search query:", "banana")
 
     if query:
         # TF Search
